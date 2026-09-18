@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install verification dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Verify tagged source
+        run: |
+          ruff check .
+          mypy src
+          pytest
+          python scripts/check_offline_report.py
+          python scripts/check_release_privacy.py
+      - run: python -m build
+      - name: Create checksums
+        run: python scripts/make_checksums.py dist SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          dist/* SHA256SUMS
+          --verify-tag
+          --title "Codex Context X-Ray $GITHUB_REF_NAME"
+          --notes-file docs/RELEASE_NOTES_0.1.0.md

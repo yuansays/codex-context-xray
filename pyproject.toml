@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "codex-context-xray"
+version = "0.1.0"
+description = "Explain what Codex will load, override, ignore, or leave conditional before it starts work."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Yuan Says AI" }]
+keywords = ["codex", "context", "configuration", "agents", "developer-tools"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "PyYAML>=6.0.2",
+  "tomli>=2.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2.2",
+  "mypy>=1.14",
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.9",
+  "types-PyYAML>=6.0.12",
+]
+assets = ["Pillow>=10.4"]
+
+[project.scripts]
+codex-xray = "codex_context_xray.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yuansays/codex-context-xray"
+Issues = "https://github.com/yuansays/codex-context-xray/issues"
+Source = "https://github.com/yuansays/codex-context-xray"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codex_context_xray"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --disable-warnings"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["codex_context_xray"]

@@ -78,7 +78,12 @@ def test_auto_trust_can_use_opted_in_user_project_record(
     codex_home.mkdir(parents=True)
     project_key = repo.resolve().as_posix()
     (codex_home / "config.toml").write_text(
-        f'[projects."{project_key}"]\ntrust_level = "trusted"\n', encoding="utf-8"
+        (
+            f'[projects."{project_key}"]\ntrust_level = "trusted"\n'
+            '[projects."/srv/fictional-other-owner/private-repo"]\n'
+            'trust_level = "untrusted"\n'
+        ),
+        encoding="utf-8",
     )
     (repo / ".codex").mkdir()
     (repo / ".codex" / "config.toml").write_text('model = "fictional"\n', encoding="utf-8")
@@ -93,7 +98,9 @@ def test_auto_trust_can_use_opted_in_user_project_record(
     serialized = render_json(report)
     assert str(home) not in serialized
     assert str(tmp_path) not in serialized
+    assert "/srv/fictional-other-owner/private-repo" not in serialized
     assert "$CODEX_HOME/config.toml" in serialized
+    assert "projects.<project-path>.trust_level" in serialized
 
 
 def test_profile_requires_explicit_user_scope(tmp_path: Path) -> None:

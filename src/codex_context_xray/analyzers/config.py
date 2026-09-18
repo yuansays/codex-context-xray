@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -133,6 +133,29 @@ def _flatten(data: Mapping[str, Any], prefix: tuple[str, ...] = ()) -> list[str]
         else:
             flattened.append(".".join(path))
     return flattened
+
+
+def _project_path_keys(data: Mapping[str, Any]) -> set[str]:
+    projects = data.get("projects")
+    if not isinstance(projects, Mapping):
+        return set()
+    return {str(key) for key in projects if str(key)}
+
+
+def _public_key_paths(paths: Iterable[str], project_paths: set[str]) -> list[str]:
+    """Hide absolute project-table keys while preserving useful provenance."""
+
+    public: set[str] = set()
+    candidates = sorted(project_paths, key=len, reverse=True)
+    for raw_path in paths:
+        safe_path = raw_path
+        for project_path in candidates:
+            prefix = f"projects.{project_path}"
+            if raw_path == prefix or raw_path.startswith(f"{prefix}."):
+                safe_path = f"projects.<project-path>{raw_path[len(prefix):]}"
+                break
+        public.add(safe_path)
+    return sorted(public)
 
 
 def _deep_merge(
@@ -307,7 +330,10 @@ def _add_file_record(
         status=status,
         reason=reason_by_status.get(status, "Configuration source was not applied."),
         precedence=precedence,
-        metadata={"keys": key_paths, "restricted_keys": restricted},
+        metadata={
+            "keys": _public_key_paths(key_paths, _project_path_keys(filtered)),
+            "restricted_keys": restricted,
+        },
     )
     result.sources.append(source)
     records.append(
@@ -474,7 +500,12 @@ def analyze_config(ctx: ScanContext) -> tuple[AnalysisResult, dict[str, Any]]:
                 status=SourceStatus.ACTIVE,
                 reason="CLI -c overrides have the highest observed precedence.",
                 precedence=cli_record.precedence,
-                metadata={"keys": _flatten(cli_data), "override_count": len(ctx.cli_overrides)},
+                metadata={
+                    "keys": _public_key_paths(
+                        _flatten(cli_data), _project_path_keys(cli_data)
+                    ),
+                    "override_count": len(ctx.cli_overrides),
+                },
             )
         )
     elif cli_errors:
@@ -501,6 +532,11 @@ def analyze_config(ctx: ScanContext) -> tuple[AnalysisResult, dict[str, Any]]:
     for key_path, source_id in origins.items():
         active_by_source.setdefault(source_id, set()).add(key_path)
     source_index = {source.id: source for source in result.sources}
+    project_paths = {
+        project_path
+        for record in records
+        for project_path in _project_path_keys(record.data)
+    }
     for record in records:
         source = source_index.get(record.id)
         if source is None or source.status is not SourceStatus.ACTIVE:
@@ -508,8 +544,12 @@ def analyze_config(ctx: ScanContext) -> tuple[AnalysisResult, dict[str, Any]]:
         all_keys = set(_flatten(record.data))
         remaining_keys = active_by_source.get(record.id, set())
         shadowed_keys = sorted(all_keys - remaining_keys)
-        source.metadata["effective_keys"] = sorted(remaining_keys)
-        source.metadata["shadowed_keys"] = shadowed_keys
+        source.metadata["effective_keys"] = _public_key_paths(
+            remaining_keys, project_paths
+        )
+        source.metadata["shadowed_keys"] = _public_key_paths(
+            shadowed_keys, project_paths
+        )
         if all_keys and not remaining_keys:
             source.status = SourceStatus.SHADOWED
             source.reason = (
@@ -553,9 +593,13 @@ def analyze_config(ctx: ScanContext) -> tuple[AnalysisResult, dict[str, Any]]:
     result.state["config"] = {
         "trust_requested": ctx.trust_requested,
         "trust_effective": ctx.trust_effective,
-        "active_keys": sorted(origins),
-        "conditional_project_keys": conditional_keys,
-        "ignored_project_keys": ignored_project_keys,
+        "active_keys": _public_key_paths(origins, project_paths),
+        "conditional_project_keys": _public_key_paths(
+            conditional_keys, project_paths
+        ),
+        "ignored_project_keys": _public_key_paths(
+            ignored_project_keys, project_paths
+        ),
         "profile": ctx.profile,
         "precedence": [record.id for record in sorted(records, key=lambda item: item.precedence)],
     }

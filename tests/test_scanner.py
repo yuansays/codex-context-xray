@@ -92,7 +92,8 @@ def test_auto_trust_can_use_opted_in_user_project_record(
     assert all(source.status is not SourceStatus.CONDITIONAL for source in project_sources)
     serialized = render_json(report)
     assert str(home) not in serialized
-    assert "$HOME" in serialized
+    assert str(tmp_path) not in serialized
+    assert "$CODEX_HOME/config.toml" in serialized
 
 
 def test_profile_requires_explicit_user_scope(tmp_path: Path) -> None:
